@@ -1,0 +1,34 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: []
+    depends_on:
+      - db
+    environment:
+      DB_SERVER: db,1433
+      DB_NAME: ${DB_NAME:-fx_pipeline}
+      DB_USER: sa
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_TRUST_SERVER_CERT: "true"
+      DB_CONNECT_ATTEMPTS: ${DB_CONNECT_ATTEMPTS:-60}
+      DB_CONNECT_DELAY_SECONDS: ${DB_CONNECT_DELAY_SECONDS:-2}
+      DB_INITIALIZE: "true"
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  mssql_data:
