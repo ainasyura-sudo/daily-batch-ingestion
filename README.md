@@ -36,6 +36,9 @@ does not return all requested currencies for the exact processing date.
 - **Gold:** SQL Server schema `gold`, containing `dim_date`,
   `dim_currency` and `fact_exchange_rate`. SQL scripts are in `sql/gold/`.
 
+A captured Bronze response and its ingestion metadata are available in
+[examples/bronze/](examples/bronze/).
+
 ## Configuration
 
 Create the local environment file:
@@ -192,6 +195,11 @@ Analytics views:
 
 Monthly results reflect the dates loaded into the database.
 
+Monthly results reflect the dates loaded into the database.
+
+Detailed table definitions, keys and indexes are documented in
+[docs/data_model.md](docs/data_model.md).
+
 ## Query Gold
 
 Connect to the intended SQL Server instance and the database configured
@@ -222,6 +230,20 @@ Gold retains the first loaded rate. If the API revises historical values,
 a rerun refreshes Bronze and Silver but does not update existing Gold facts.
 
 The Gold load commits on success and rolls back on failure.
+
+## Logging and Metrics
+
+The pipeline emits JSON logs with UTC timestamps, processing dates,
+and success or failure status.
+
+Completion logs include records fetched, fact rows inserted,
+layer durations and total pipeline duration.
+
+Failure logs identify the failed stage and exception.
+Successful runs exit with code 0; failed runs exit with code 1.
+
+Unit-test evidence is available in
+[docs/evidence/unit-tests.txt](docs/evidence/unit-tests.txt).
 
 ## Tests
 
