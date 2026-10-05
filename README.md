@@ -226,8 +226,11 @@ Bronze and Silver files are replaced for the requested processing date.
 Gold skips existing facts using the business key
 `(date_id, base_currency_id, quote_currency_id)`.
 
-Gold retains the first loaded rate. If the API revises historical values,
-a rerun refreshes Bronze and Silver but does not update existing Gold facts.
+Gold inserts missing facts and updates existing facts when the source
+rate changes. Unchanged facts are skipped. The unique business key
+prevents duplicate rows.
+
+`loaded_at_utc` records the latest insertion or rate-update time.
 
 The Gold load commits on success and rolls back on failure.
 

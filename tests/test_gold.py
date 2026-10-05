@@ -43,7 +43,7 @@ _SILVER_ROWS = [
 ]
 
 
-def _make_conn(insert_action: str = "INSERT") -> MagicMock:
+def _make_conn(insert_action: str | None= "INSERT") -> MagicMock:
     """Return a mock pyodbc connection whose cursor behaves sensibly."""
     cursor = MagicMock()
     # _upsert_dim_currency does cursor.fetchone() → (currency_id,)
@@ -55,9 +55,9 @@ def _make_conn(insert_action: str = "INSERT") -> MagicMock:
         (2,),            # EUR currency_id
         (3,),            # GBP currency_id
         (4,),            # MYR currency_id
-        (insert_action,),  # fact row 1
-        (insert_action,),  # fact row 2
-        (insert_action,),  # fact row 3
+        (insert_action,) if insert_action is not None else None,
+        (insert_action,) if insert_action is not None else None,
+        (insert_action,) if insert_action is not None else None,
     ]
     conn = MagicMock()
     conn.cursor.return_value = cursor
@@ -132,9 +132,28 @@ class TestBuildGold(unittest.TestCase):
         self.assertEqual(result, 3)
 
     def test_skips_already_present_rows(self):
-        conn = _make_conn(insert_action="UPDATE")  # MERGE matches → no INSERT
-        result = build_gold(DATE, silver_root=self.silver_root, conn=conn)
+        conn = _make_conn(insert_action=None)
+        result = build_gold(
+            DATE,
+            silver_root=self.silver_root,
+            conn=conn,
+        )
+
         self.assertEqual(result, 0)
+        conn.commit.assert_called_once()
+        conn.rollback.assert_not_called()
+
+    def test_updates_are_not_counted_as_inserts(self):
+        conn = _make_conn(insert_action="UPDATE")
+        result = build_gold(
+            DATE,
+            silver_root=self.silver_root,
+            conn=conn,
+        )
+
+        self.assertEqual(result, 0)
+        conn.commit.assert_called_once()
+        conn.rollback.assert_not_called()
 
     def test_missing_silver_raises_file_not_found(self):
         conn = MagicMock()

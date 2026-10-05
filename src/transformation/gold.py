@@ -123,36 +123,79 @@ def _insert_fact(
     exchange_rate: Decimal,
 ) -> int:
     """
-    Insert one fact row using MERGE to skip existing (date, base, quote)
-    combinations (idempotent re-runs).  Returns 1 if inserted, 0 if skipped.
+    Insert missing facts or update changed rates.
+    Return 1 for INSERT, otherwise 0.
+    Updates are reported separately in logs.
     """
+    if not exchange_rate.is_finite() or exchange_rate <= 0:
+        raise ValueError("Exchange rate must be finite and positive")
+
     inverse_rate = Decimal(1) / exchange_rate
 
     cursor.execute(
         """
-        MERGE gold.fact_exchange_rate AS t
+        MERGE gold.fact_exchange_rate WITH (HOLDLOCK) AS t
         USING (
-            SELECT ? AS date_id,
-                   ? AS base_currency_id,
-                   ? AS quote_currency_id,
-                   ? AS exchange_rate,
-                   ? AS inverse_rate
+            SELECT
+                ? AS date_id,
+                ? AS base_currency_id,
+                ? AS quote_currency_id,
+                CAST(? AS DECIMAL(18,6)) AS exchange_rate,
+                CAST(? AS DECIMAL(18,6)) AS inverse_rate
         ) AS s
-        ON  t.date_id           = s.date_id
-        AND t.base_currency_id  = s.base_currency_id
+        ON  t.date_id = s.date_id
+        AND t.base_currency_id = s.base_currency_id
         AND t.quote_currency_id = s.quote_currency_id
+
+        WHEN MATCHED AND (
+            t.exchange_rate <> s.exchange_rate
+            OR t.inverse_rate <> s.inverse_rate
+        ) THEN
+            UPDATE SET
+                exchange_rate = s.exchange_rate,
+                inverse_rate = s.inverse_rate,
+                loaded_at_utc = SYSUTCDATETIME()
+
         WHEN NOT MATCHED BY TARGET THEN
-            INSERT (date_id, base_currency_id, quote_currency_id,
-                    exchange_rate, inverse_rate)
-            VALUES (s.date_id, s.base_currency_id, s.quote_currency_id,
-                    s.exchange_rate, s.inverse_rate)
+            INSERT (
+                date_id,
+                base_currency_id,
+                quote_currency_id,
+                exchange_rate,
+                inverse_rate
+            )
+            VALUES (
+                s.date_id,
+                s.base_currency_id,
+                s.quote_currency_id,
+                s.exchange_rate,
+                s.inverse_rate
+            )
+
         OUTPUT $action;
         """,
-        date_id, base_id, quote_id,
-        str(exchange_rate), str(inverse_rate),
+        date_id,
+        base_id,
+        quote_id,
+        str(exchange_rate),
+        str(inverse_rate),
     )
+
     row = cursor.fetchone()
-    return 1 if row and row[0] == "INSERT" else 0
+    action = row[0] if row else "SKIP"
+
+    logger.info(
+        "Gold fact processed",
+        extra={"fields": {
+            "event": "gold_fact_processed",
+            "date_id": date_id,
+            "base_currency_id": base_id,
+            "quote_currency_id": quote_id,
+            "action": action,
+        }},
+    )
+
+    return 1 if action == "INSERT" else 0
 
 
 # ---------------------------------------------------------------------------

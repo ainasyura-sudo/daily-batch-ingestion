@@ -12,6 +12,7 @@ test_inserts_correct_row_count (test_gold.TestBuildGold.test_inserts_correct_row
 test_missing_silver_raises_file_not_found (test_gold.TestBuildGold.test_missing_silver_raises_file_not_found) ... ok
 test_rollback_on_error (test_gold.TestBuildGold.test_rollback_on_error) ... ok
 test_skips_already_present_rows (test_gold.TestBuildGold.test_skips_already_present_rows) ... ok
+test_updates_are_not_counted_as_inserts (test_gold.TestBuildGold.test_updates_are_not_counted_as_inserts) ... ok
 test_weekday_date (test_gold.TestDateAttributes.test_weekday_date) ... ok
 test_weekend_date (test_gold.TestDateAttributes.test_weekend_date) ... ok
 test_inverse_rate_value (test_gold.TestInverseRate.test_inverse_rate_value) ... ok
@@ -21,6 +22,6 @@ test_invalid_rate_fails (test_silver.TestSilver.test_invalid_rate_fails) ... ok
 test_missing_rate_fails (test_silver.TestSilver.test_missing_rate_fails) ... ok
 
 ----------------------------------------------------------------------
-Ran 21 tests in 0.047s
+Ran 22 tests in 0.057s
 
 OK
