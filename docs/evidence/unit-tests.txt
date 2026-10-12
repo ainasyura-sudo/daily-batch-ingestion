@@ -3,6 +3,7 @@ test_500_retries_then_succeeds (test_api_client.TestApiClient.test_500_retries_t
 test_missing_field_fails (test_api_client.TestApiClient.test_missing_field_fails) ... ok
 test_success (test_api_client.TestApiClient.test_success) ... ok
 test_timeout_fails_after_four_attempts (test_api_client.TestApiClient.test_timeout_fails_after_four_attempts) ... ok
+test_rejects_unexpected_quote_currency (test_data_quality.TestSilverDataQuality.test_rejects_unexpected_quote_currency) ... ok
 test_database_name_is_validated_before_connecting (test_database.TestDatabaseBootstrap.test_database_name_is_validated_before_connecting) ... ok
 test_initialize_creates_database_and_applies_scripts (test_database.TestDatabaseBootstrap.test_initialize_creates_database_and_applies_scripts) ... ok
 test_sql_file_is_split_on_go_batches (test_database.TestDatabaseBootstrap.test_sql_file_is_split_on_go_batches) ... ok
@@ -22,6 +23,6 @@ test_invalid_rate_fails (test_silver.TestSilver.test_invalid_rate_fails) ... ok
 test_missing_rate_fails (test_silver.TestSilver.test_missing_rate_fails) ... ok
 
 ----------------------------------------------------------------------
-Ran 22 tests in 0.057s
+Ran 23 tests in 0.189s
 
 OK

@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from src.transformation.data_quality import validate_silver_csv
+
 
 REQUIRED_FIELDS = {"date", "base", "quote", "rate"}
 
@@ -73,5 +75,7 @@ def build_silver(
         )
         writer.writeheader()
         writer.writerows(cleaned[key] for key in sorted(cleaned))
+
+    validate_silver_csv(silver_path)
 
     return silver_path
