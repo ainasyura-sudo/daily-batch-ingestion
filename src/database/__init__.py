@@ -13,6 +13,7 @@ Required environment variables (set in .env or the shell):
 import os
 import re
 import time
+from datetime import date
 from pathlib import Path
 
 import pyodbc
@@ -82,6 +83,125 @@ def get_connection(database: str | None = None) -> pyodbc.Connection:
 
     return pyodbc.connect(_connection_string(database or os.environ["DB_NAME"]))
 
+def get_watermark(
+    pipeline_name: str = "daily_exchange_rate_pipeline",
+) -> date | None:
+    """Return the latest date successfully committed to Gold."""
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT last_successful_date
+            FROM gold.pipeline_watermark
+            WHERE pipeline_name = ?
+            """,
+            pipeline_name,
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        connection.close()
+
+
+def get_pending_date(
+    pipeline_name: str = "daily_exchange_rate_pipeline",
+) -> date | None:
+    """Return the date whose load needs to be retried."""
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT pending_date
+            FROM gold.pipeline_watermark
+            WHERE pipeline_name = ?
+            """,
+            pipeline_name,
+        )
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        connection.close()
+
+
+def mark_pending_date(
+    processing_date: str,
+    pipeline_name: str = "daily_exchange_rate_pipeline",
+) -> None:
+    """Save the date being attempted, so a failed load can be retried."""
+    target_date = date.fromisoformat(processing_date)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            MERGE gold.pipeline_watermark WITH (HOLDLOCK) AS target
+            USING (SELECT ? AS pipeline_name, ? AS pending_date) AS source
+              ON target.pipeline_name = source.pipeline_name
+            WHEN MATCHED THEN
+              UPDATE SET pending_date = source.pending_date,
+                         updated_at_utc = SYSUTCDATETIME()
+            WHEN NOT MATCHED BY TARGET THEN
+              INSERT (pipeline_name, pending_date)
+              VALUES (source.pipeline_name, source.pending_date);
+            """,
+            pipeline_name,
+            target_date,
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def advance_watermark(
+    processing_date: str,
+    pipeline_name: str = "daily_exchange_rate_pipeline",
+) -> None:
+    """Advance the watermark after a successful Gold load."""
+    target_date = date.fromisoformat(processing_date)
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            MERGE gold.pipeline_watermark WITH (HOLDLOCK) AS target
+            USING (
+                SELECT ? AS pipeline_name, ? AS last_successful_date
+            ) AS source
+              ON target.pipeline_name = source.pipeline_name
+            WHEN MATCHED THEN
+              UPDATE SET
+                last_successful_date = CASE
+                    WHEN target.last_successful_date IS NULL
+                      OR target.last_successful_date
+                           < source.last_successful_date
+                    THEN source.last_successful_date
+                    ELSE target.last_successful_date
+                END,
+                pending_date = CASE
+                    WHEN target.pending_date IS NULL
+                      OR target.pending_date <= source.last_successful_date
+                    THEN NULL
+                    ELSE target.pending_date
+                END,
+                updated_at_utc = SYSUTCDATETIME()
+            WHEN NOT MATCHED BY TARGET THEN
+              INSERT (pipeline_name, last_successful_date, pending_date)
+              VALUES (source.pipeline_name, source.last_successful_date, NULL);
+            """,
+            pipeline_name,
+            target_date,
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 def _run_sql_file(cursor: pyodbc.Cursor, path: Path) -> None:
     """Execute sqlcmd-style batches separated by standalone GO lines."""
